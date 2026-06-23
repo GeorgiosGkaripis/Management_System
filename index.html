@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SiteSpice - Interactive Blueprint Tracker v2</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--scroll-track, #0f172a); }
+        ::-webkit-scrollbar-thumb { background: #d97706; border-radius: 3px; }
+        
+        /* Pulse εφέ για τα εκκρεμή pins */
+        @keyframes pin-pulse {
+            0% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: translate(-50%, -50%) scale(1.1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .pulse-pin { animation: pin-pulse 2s infinite; }
+
+        /* CSS Variables για εύκολο Light/Dark Mode handling πέρα από το Tailwind */
+        :root { --scroll-track: #0f172a; }
+        .light-mode { --scroll-track: #f1f5f9; }
+
+        /* Toolbar buttons */
+        .canvas-tool-btn {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #cbd5e1;
+            border-radius: 6px;
+            width: 32px; height: 32px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+        }
+        .canvas-tool-btn:hover { background: #334155; color: #f59e0b; }
+    </style>
+</head>
+<body id="appBody" class="bg-slate-900 text-slate-100 min-h-screen font-sans flex flex-col transition-colors duration-300">
+
+    <header class="bg-slate-950 border-b border-amber-600/30 px-6 py-4 flex flex-wrap justify-between items-center gap-4 shadow-xl transition-colors duration-300" id="appHeader">
+        <div class="flex items-center space-x-3">
+            <div class="bg-amber-600 text-slate-950 p-2.5 rounded-lg font-black tracking-wider text-xl shadow-md shadow-amber-600/20">
+                SS
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-tight text-slate-100 flex items-center gap-2" id="headerTitle">
+                    SiteSpice <span class="text-amber-500 text-sm font-medium px-2 py-0.5 bg-amber-500/10 rounded border border-amber-500/20">Blueprint Annotator v2</span>
+                </h1>
+                <p class="text-xs text-slate-400" id="headerSubtitle">Διαδραστική Διαχείριση Εργασιών & Τεχνικών Μελετών επί Κατόψεως</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center flex-wrap gap-3">
+            <button onclick="toggleTheme()" class="bg-slate-800 hover:bg-slate-700 text-amber-500 p-2.5 rounded-lg text-sm font-semibold border border-slate-700 transition flex items-center justify-center cursor-pointer" id="themeToggleBtn" title="Αλλαγή Φωτεινότητας">
+                <i class="fa-solid fa-sun text-lg" id="themeIcon"></i>
+            </button>
+
+            <button onclick="exportData()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-lg text-sm font-semibold border border-slate-700 transition flex items-center gap-2 cursor-pointer" id="btnExport">
+                <i class="fa-solid fa-download text-amber-500"></i> Εξαγωγή JSON
+            </button>
+            <button onclick="exportPDF()" class="bg-amber-600 hover:bg-amber-700 text-slate-950 px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 cursor-pointer" id="btnPDF">
+                <i class="fa-solid fa-file-pdf"></i> Εξαγωγή PDF
+            </button>
+            <label class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-lg text-sm font-semibold border border-slate-700 transition flex items-center gap-2 cursor-pointer" id="btnImport">
+                <i class="fa-solid fa-upload text-amber-500"></i> Εισαγωγή JSON
+                <input type="file" id="importFile" accept=".json" onchange="importData(event)" class="hidden">
+            </label>
+            <button onclick="clearAllData()" class="bg-red-950/40 hover:bg-red-900/60 text-red-400 px-4 py-2 rounded-lg text-sm font-semibold border border-red-900/50 transition flex items-center gap-2 cursor-pointer">
+                <i class="fa-solid fa-trash"></i> Καθαρισμός
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-4 p-6 gap-6 overflow-hidden">
+        
+        <div class="lg:col-span-1 flex flex-col gap-4">
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-5 shadow-lg transition-colors duration-300" id="sidebarUploadBox">
+                <h3 class="text-amber-500 font-bold text-sm uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <i class="fa-solid fa-map"></i> Φόρτωση Σχεδίου
+                </h3>
+                <div class="border-2 border-dashed border-slate-700 hover:border-amber-500/50 rounded-lg p-6 text-center transition bg-slate-900/50 relative group" id="uploadZone">
+                    <input type="file" id="blueprintUpload" accept="image/*" onchange="loadBlueprint(event)" class="absolute inset-0 opacity-0 cursor-pointer">
+                    <i class="fa-solid fa-cloud-arrow-up text-3xl text-slate-500 group-hover:text-amber-500 transition mb-2"></i>
+                    <p class="text-xs text-slate-400 font-medium" id="uploadZoneText">Σύρετε ή επιλέξτε αρχείο εικόνας (JPG, PNG, SVG)</p>
+                </div>
+            </div>
+
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-5 shadow-lg flex-1 flex flex-col justify-between transition-colors duration-300" id="sidebarInfoBox">
+                <div>
+                    <h3 class="text-amber-500 font-bold text-sm uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-circle-info"></i> Οδηγίες Χρήσης
+                    </h3>
+                    <ul class="text-xs text-slate-400 space-y-2.5" id="instructionsList">
+                        <li class="flex gap-2"><i class="fa-solid fa-check text-amber-500 mt-0.5"></i> Ανεβάστε την κάτοψη του έργου.</li>
+                        <li class="flex gap-2"><i class="fa-solid fa-check text-amber-500 mt-0.5"></i> Κάντε <b>κλικ οπουδήποτε</b> πάνω στο σχέδιο για να τοποθετήσετε ένα νέο Pin εργασιών.</li>
+                        <li class="flex gap-2"><i class="fa-solid fa-check text-amber-500 mt-0.5"></i> Κάντε κλικ σε υπάρχον Pin για να διαχειριστείτε τις τεχνικές του εργασίες και φωτογραφίες.</li>
+                    </ul>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-slate-800 grid grid-cols-2 gap-2 text-center" id="statsDivider">
+                    <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 transition-colors duration-300" id="statCardPending">
+                        <div class="text-2xl font-bold text-red-500" id="pendingPinsCount">0</div>
+                        <div class="text-[10px] text-slate-400 uppercase tracking-wider mt-1" id="statLabelPending">Σε Εκκρεμότητα</div>
+                    </div>
+                    <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 transition-colors duration-300" id="statCardDone">
+                        <div class="text-2xl font-bold text-green-500" id="completedPinsCount">0</div>
+                        <div class="text-[10px] text-slate-400 uppercase tracking-wider mt-1" id="statLabelDone">Ολοκληρωμένα</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="lg:col-span-3 flex flex-col gap-2">
+            <!-- Toolbar zoom / rotate -->
+            <div class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 flex items-center gap-2 flex-wrap shadow-lg" id="canvasToolbar">
+                <span class="text-[11px] text-slate-500 uppercase tracking-widest font-semibold mr-1">Σχέδιο</span>
+                <div class="w-px h-5 bg-slate-700"></div>
+                <button onclick="adjustZoom(0.1)"  title="Zoom In"      class="canvas-tool-btn"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                <button onclick="adjustZoom(-0.1)" title="Zoom Out"     class="canvas-tool-btn"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                <button onclick="resetTransform()" title="Reset"        class="canvas-tool-btn text-amber-500"><i class="fa-solid fa-arrows-rotate"></i></button>
+                <div class="w-px h-5 bg-slate-700"></div>
+                <button onclick="adjustRotate(-90)" title="Στροφή -90°" class="canvas-tool-btn"><i class="fa-solid fa-rotate-left"></i></button>
+                <button onclick="adjustRotate(90)"  title="Στροφή +90°" class="canvas-tool-btn"><i class="fa-solid fa-rotate-right"></i></button>
+                <div class="w-px h-5 bg-slate-700"></div>
+                <span class="text-[11px] text-slate-400" id="transformLabel">100% · 0°</span>
+                <div class="flex-1"></div>
+                <span class="text-[10px] text-slate-600 italic">Scroll πάνω στην εικόνα για zoom</span>
+            </div>
+
+            <!-- Canvas -->
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg flex items-center justify-center overflow-auto max-h-[78vh] relative min-h-[500px] transition-colors duration-300" id="canvasContainer">
+                <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-8 text-center pointer-events-none">
+                    <i class="fa-solid fa-drafting-compass text-6xl mb-4 text-slate-700"></i>
+                    <h4 class="text-lg font-semibold text-slate-400" id="emptyStateTitle">Δεν έχει φορτωθεί σχέδιο</h4>
+                    <p class="text-sm text-slate-500 max-w-sm mt-1">Ανεβάστε μια κάτοψη από το αριστερό panel για να ξεκινήσει η ψηφιακή καταγραφή.</p>
+                </div>
+
+                <!-- Εξωτερικό container που δέχεται το CSS transform -->
+                <div id="transformContainer" style="transform-origin: center center; transition: transform 0.2s ease;">
+                    <div id="blueprintWrapper" class="relative hidden inline-block select-none">
+                        <img id="blueprintImg" src="" alt="Blueprint" class="block h-auto cursor-crosshair rounded-lg" style="max-width:100%;" onclick="handleCanvasClick(event)">
+                        <div id="pinsHolder" class="absolute inset-0 pointer-events-none"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="taskModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-xl shadow-2xl flex flex-col max-h-[90vh] transition-colors duration-300" id="modalContainer">
+            <div class="bg-slate-950 px-6 py-4 border-b border-slate-800 flex justify-between items-center transition-colors duration-300" id="modalHeader">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2" id="modalTitleText">
+                        <i class="fa-solid fa-location-dot text-amber-500" id="modalPinIcon"></i>
+                        <span id="modalTitle">Διαχείριση Σημείου</span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-0.5" id="modalSubtitle">Προσθήκη, έλεγχος εκκρεμοτήτων & φωτογραφιών φωτογραφιών</p>
+                </div>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-100 text-xl transition cursor-pointer" id="modalCloseX">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-6 flex-1">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2" id="labelPinName">Όνομα / Περιοχή Σημείου</label>
+                    <input type="text" id="pinNameInput" onchange="updatePinName()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500 transition text-sm" placeholder="e.g. Κλιμακοστάσιο Α, Room 102...">
+                </div>
+
+                <div class="bg-slate-950 p-4 rounded-lg border border-slate-800/80 space-y-3 transition-colors duration-300" id="modalFormContainer">
+                    <h4 class="text-xs font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-plus"></i> Νέα Εργασία & Τεκμηρίωση
+                    </h4>
+                    <div class="grid grid-cols-1 gap-2">
+                        <input type="text" id="taskDesc" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500 transition text-sm" placeholder="Περιγραφή εργασίας (e.g. Σπατουλάρισμα)...">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" id="taskOwner" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500 transition text-sm" placeholder="Υπεύθυνος / Συνεργείο">
+                        <select id="taskStatus" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500 transition text-sm">
+                            <option value="pending">Προς υλοποίηση</option>
+                            <option value="progress">Σε εξέλιξη</option>
+                            <option value="completed">Ολοκληρώθηκε</option>
+                        </select>
+                    </div>
+                    
+                    <div class="space-y-1">
+                        <label class="block text-[11px] font-semibold text-slate-400" id="labelTaskPhoto">Συνημμένες Φωτογραφίες — πολλαπλή επιλογή (Προαιρετικά)</label>
+                        <input type="file" id="taskPhoto" accept="image/*" multiple class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700 file:transition file:cursor-pointer">
+                    </div>
+
+                    <button onclick="addTask()" class="w-full bg-amber-600 hover:bg-amber-700 text-slate-950 font-bold py-2 px-4 rounded-lg text-xs uppercase tracking-wider transition cursor-pointer shadow-md shadow-amber-600/10">
+                        Προσθήκη στη Λίστα
+                    </button>
+                </div>
+
+                <div>
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5" id="labelTaskListTitle">
+                        <i class="fa-solid fa-list-check"></i> Καταγεγραμμένες Εργασίες (<span id="modalTaskCount">0</span>)
+                    </h4>
+                    <div id="taskList" class="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                        </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-950 px-6 py-4 border-t border-slate-800 flex justify-between items-center transition-colors duration-300" id="modalFooter">
+                <button onclick="deletePin()" class="text-red-400 hover:text-red-300 text-xs font-semibold flex items-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-trash-can"></i> Διαγραφή Σημείου
+                </button>
+                <button onclick="closeModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-4 py-2 rounded-lg transition cursor-pointer" id="btnModalClose">
+                    Κλείσιμο
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="lightboxModal" class="hidden fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4" onclick="closeLightbox()">
+        <button class="absolute top-4 right-4 text-white text-3xl hover:text-amber-500 transition cursor-pointer">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+        <img id="lightboxImg" src="" alt="Full Size Visual" class="max-w-full max-h-[90vh] rounded shadow-2xl object-contain" onclick="event.stopPropagation()">
+    </div>
+
+    <footer class="bg-slate-950 text-center py-3 border-t border-slate-900 text-[10px] text-slate-500 transition-colors duration-300" id="appFooter">
+        &copy; 2026 ΓΚΑΡΙΠΗΣ ΓΙΩΡΓΟΣ &bull; SiteSpice Management System &bull; Value is seen in KPIs, not words.
+    </footer>
+
+    <!-- PDF report — κρυφό κανονικά, ορατό μόνο @print -->
+    <div id="pdf-report"></div>
+
+    <style>
+        @media print {
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { background: #fff !important; color: #0f172a !important; }
+            header, #canvasToolbar, #sidebarUploadBox, #sidebarInfoBox,
+            #taskModal, #lightboxModal, #appFooter, #btnPDF, #btnExport, #btnImport { display: none !important; }
+            main { display: block !important; padding: 0 !important; }
+            .lg\:col-span-1 { display: none !important; }
+            .lg\:col-span-3 { display: block !important; width: 100% !important; }
+            #canvasContainer { max-height: none !important; overflow: visible !important; border: none !important; background: #fff !important; box-shadow: none !important; min-height: unset !important; }
+            #transformContainer { transform: none !important; }
+            #blueprintWrapper, #blueprintImg { max-width: 100% !important; width: 100% !important; }
+            #pdf-report { display: block !important; }
+        }
+        #pdf-report { display: none; font-family: 'Segoe UI', system-ui, sans-serif; color: #0f172a; padding: 20px 24px; }
+        #pdf-report h2 { font-size: 15px; font-weight: 700; border-bottom: 2px solid #d97706; padding-bottom: 6px; margin-bottom: 12px; }
+        .pdf-pin-block  { margin-bottom: 16px; page-break-inside: avoid; }
+        .pdf-pin-title  { font-size: 13px; font-weight: 700; color: #d97706; margin-bottom: 6px; }
+        .pdf-task-row   { font-size: 11px; border: 1px solid #e2e8f0; border-radius: 4px; padding: 8px 10px; margin-bottom: 5px; background: #f8fafc; }
+        .pdf-status     { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; display: inline-block; margin-left: 6px; }
+        .pdf-s-pending  { background: #fee2e2; color: #b91c1c; }
+        .pdf-s-progress { background: #fef3c7; color: #92400e; }
+        .pdf-s-done     { background: #dcfce7; color: #15803d; }
+        .pdf-photos     { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+        .pdf-photos img { max-width: 100px; max-height: 80px; object-fit: cover; border-radius: 4px; border: 1px solid #e2e8f0; }
+        .pdf-footer-ln  { font-size: 9px; color: #94a3b8; text-align: center; margin-top: 16px; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+    </style>
+
+    <script>
+        // Κατάσταση Εφαρμογής (App State)
+        let appState = {
+            blueprintDataUrl: "", 
+            pins: [],
+            theme: "dark" // "dark" ή "light"
+        };
+
+        let activePinId = null;
+
+        // =====================================================
+        // ZOOM & ROTATE STATE
+        // =====================================================
+        let viewScale    = 1.0;   // τρέχον zoom (1.0 = 100%)
+        let viewRotation = 0;     // τρέχουσα γωνία σε μοίρες
+
+        function applyTransform() {
+            const tc = document.getElementById('transformContainer');
+            if (!tc) return;
+            tc.style.transform = `scale(${viewScale}) rotate(${viewRotation}deg)`;
+            document.getElementById('transformLabel').textContent =
+                `${Math.round(viewScale * 100)}% · ${viewRotation}°`;
+        }
+
+        function adjustZoom(delta) {
+            viewScale = Math.min(5, Math.max(0.2, viewScale + delta));
+            applyTransform();
+        }
+
+        function adjustRotate(deg) {
+            viewRotation = (viewRotation + deg + 360) % 360;
+            applyTransform();
+        }
+
+        function resetTransform() {
+            viewScale    = 1.0;
+            viewRotation = 0;
+            applyTransform();
+        }
+
+        // Zoom με scroll του mouse πάνω στον canvas
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('canvasContainer').addEventListener('wheel', (e) => {
+                if (document.getElementById('blueprintWrapper').classList.contains('hidden')) return;
+                e.preventDefault();
+                adjustZoom(e.deltaY < 0 ? 0.1 : -0.1);
+            }, { passive: false });
+        });
+
+        // Φόρτωση δεδομένων από LocalStorage κατά την εκκίνηση
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedData = localStorage.getItem('siteSpice_blueprint_data');
+            if (savedData) {
+                try {
+                    appState = JSON.parse(savedData);
+                    
+                    // Επαναφορά Κάτοψης αν υπάρχει
+                    if (appState.blueprintDataUrl) {
+                        const img = document.getElementById('blueprintImg');
+                        img.src = appState.blueprintDataUrl;
+                        document.getElementById('blueprintWrapper').classList.remove('hidden');
+                        document.getElementById('emptyState').classList.add('hidden');
+                    }
+                    
+                    // Επαναφορά Theme προτίμησης
+                    if (!appState.theme) appState.theme = "dark";
+                    applyTheme(appState.theme);
+
+                    renderPins();
+                    updateGlobalStats();
+                } catch (e) {
+                    console.error("Σφάλμα ανάγνωσης LocalStorage data", e);
+                }
+            } else {
+                applyTheme("dark"); // Default εκκίνηση
+            }
+        });
+
+        // Αποθήκευση στο Local Storage
+        function saveToStorage() {
+            localStorage.setItem('siteSpice_blueprint_data', JSON.stringify(appState));
+            updateGlobalStats();
+        }
+
+        // --- THEME / LIGHT-DARK MODE LOGIC ---
+        function toggleTheme() {
+            const nextTheme = appState.theme === "dark" ? "light" : "dark";
+            appState.theme = nextTheme;
+            saveToStorage();
+            applyTheme(nextTheme);
+        }
+
+        function applyTheme(theme) {
+            const body = document.getElementById('appBody');
+            const header = document.getElementById('appHeader');
+            const title = document.getElementById('headerTitle');
+            const subtitle = document.getElementById('headerSubtitle');
+            const btnEx = document.getElementById('btnExport');
+            const btnIm = document.getElementById('btnImport');
+            const toggleBtn = document.getElementById('themeToggleBtn');
+            const icon = document.getElementById('themeIcon');
+            const sUpload = document.getElementById('sidebarUploadBox');
+            const sInfo = document.getElementById('sidebarInfoBox');
+            const uZone = document.getElementById('uploadZone');
+            const uZoneText = document.getElementById('uploadZoneText');
+            const instList = document.getElementById('instructionsList');
+            const cContainer = document.getElementById('canvasContainer');
+            const eTitle = document.getElementById('emptyStateTitle');
+            const sCardP = document.getElementById('statCardPending');
+            const sCardD = document.getElementById('statCardDone');
+            const sLabelP = document.getElementById('statLabelPending');
+            const sLabelD = document.getElementById('statLabelDone');
+            const sDiv = document.getElementById('statsDivider');
+            const footer = document.getElementById('appFooter');
+
+            // Modal elements
+            const mContainer = document.getElementById('modalContainer');
+            const mHeader = document.getElementById('modalHeader');
+            const mTitleT = document.getElementById('modalTitleText');
+            const mSub = document.getElementById('modalSubtitle');
+            const mCloseX = document.getElementById('modalCloseX');
+            const lPinName = document.getElementById('labelPinName');
+            const mForm = document.getElementById('modalFormContainer');
+            const lPhoto = document.getElementById('labelTaskPhoto');
+            const lListT = document.getElementById('labelTaskListTitle');
+            const mFooter = document.getElementById('modalFooter');
+            const bModClose = document.getElementById('btnModalClose');
+
+            if (theme === "light") {
+                body.classList.replace('bg-slate-900', 'bg-slate-50');
+                body.classList.add('text-slate-800', 'light-mode');
+                body.classList.remove('text-slate-100');
+                
+                header.classList.replace('bg-slate-950', 'bg-white');
+                header.classList.replace('border-amber-600/30', 'border-slate-200');
+                title.classList.replace('text-slate-100', 'text-slate-900');
+                subtitle.classList.replace('text-slate-400', 'text-slate-500');
+
+                btnEx.classList.replace('bg-slate-800', 'bg-slate-100');
+                btnEx.classList.replace('hover:bg-slate-700', 'hover:bg-slate-200');
+                btnEx.classList.replace('text-slate-200', 'text-slate-700');
+                btnEx.classList.replace('border-slate-700', 'border-slate-300');
+
+                btnIm.classList.replace('bg-slate-800', 'bg-slate-100');
+                btnIm.classList.replace('hover:bg-slate-700', 'hover:bg-slate-200');
+                btnIm.classList.replace('text-slate-200', 'text-slate-700');
+                btnIm.classList.replace('border-slate-700', 'border-slate-300');
+
+                toggleBtn.classList.replace('bg-slate-800', 'bg-slate-100');
+                toggleBtn.classList.replace('border-slate-700', 'border-slate-300');
+                toggleBtn.classList.replace('text-amber-500', 'text-slate-600');
+                icon.className = "fa-solid fa-moon text-lg";
+
+                sUpload.classList.replace('bg-slate-950', 'bg-white');
+                sUpload.classList.replace('border-slate-800', 'border-slate-200');
+                uZone.classList.replace('bg-slate-900/50', 'bg-slate-50');
+                uZone.classList.replace('border-slate-700', 'border-slate-200');
+                uZoneText.classList.replace('text-slate-400', 'text-slate-500');
+
+                sInfo.classList.replace('bg-slate-950', 'bg-white');
+                sInfo.classList.replace('border-slate-800', 'border-slate-200');
+                instList.classList.replace('text-slate-400', 'text-slate-600');
+
+                sDiv.classList.replace('border-slate-800', 'border-slate-200');
+                sCardP.classList.replace('bg-slate-900', 'bg-slate-50');
+                sCardP.classList.replace('border-slate-800', 'border-slate-200');
+                sCardD.classList.replace('bg-slate-900', 'bg-slate-50');
+                sCardD.classList.replace('border-slate-800', 'border-slate-200');
+                sLabelP.classList.replace('text-slate-400', 'text-slate-500');
+                sLabelD.classList.replace('text-slate-400', 'text-slate-500');
+
+                cContainer.classList.replace('bg-slate-950', 'bg-white');
+                cContainer.classList.replace('border-slate-800', 'border-slate-200');
+                if (eTitle) eTitle.classList.replace('text-slate-400', 'text-slate-700');
+
+                footer.classList.replace('bg-slate-950', 'bg-white');
+                footer.classList.replace('border-t-slate-900', 'border-t-slate-200');
+
+                // Modal Light Theme Injection
+                mContainer.classList.replace('bg-slate-900', 'bg-white');
+                mContainer.classList.replace('border-slate-800', 'border-slate-200');
+                mHeader.classList.replace('bg-slate-950', 'bg-slate-50');
+                mHeader.classList.replace('border-b-slate-800', 'border-b-slate-200');
+                mTitleT.classList.replace('text-slate-100', 'text-slate-900');
+                mSub.classList.replace('text-slate-400', 'text-slate-500');
+                mCloseX.classList.replace('text-slate-400', 'text-slate-600');
+                mCloseX.classList.replace('hover:text-slate-100', 'hover:text-slate-900');
+                lPinName.classList.replace('text-slate-400', 'text-slate-700');
+                
+                mForm.classList.replace('bg-slate-950', 'bg-slate-50');
+                mForm.classList.replace('border-slate-800/80', 'border-slate-200');
+                lPhoto.classList.replace('text-slate-400', 'text-slate-600');
+                lListT.classList.replace('text-slate-400', 'text-slate-700');
+                mFooter.classList.replace('bg-slate-950', 'bg-slate-50');
+                mFooter.classList.replace('border-t-slate-800', 'border-t-slate-200');
+                
+                bModClose.classList.replace('bg-slate-800', 'bg-slate-200');
+                bModClose.classList.replace('hover:bg-slate-700', 'hover:bg-slate-300');
+                bModClose.classList.replace('text-slate-200', 'text-slate-700');
+            } else {
+                // Επαναφορά σε Dark Mode
+                body.classList.replace('bg-slate-50', 'bg-slate-900');
+                body.classList.remove('text-slate-800', 'light-mode');
+                body.classList.add('text-slate-100');
+
+                header.classList.replace('bg-white', 'bg-slate-950');
+                header.classList.replace('border-slate-200', 'border-amber-600/30');
+                title.classList.replace('text-slate-900', 'text-slate-100');
+                subtitle.classList.replace('text-slate-500', 'text-slate-400');
+
+                btnEx.classList.replace('bg-slate-100', 'bg-slate-800');
+                btnEx.classList.replace('hover:bg-slate-200', 'hover:bg-slate-700');
+                btnEx.classList.replace('text-slate-700', 'text-slate-200');
+                btnEx.classList.replace('border-slate-300', 'border-slate-700');
+
+                btnIm.classList.replace('bg-slate-100', 'bg-slate-800');
+                btnIm.classList.replace('hover:bg-slate-200', 'hover:bg-slate-700');
+                btnIm.classList.replace('text-slate-700', 'text-slate-200');
+                btnIm.classList.replace('border-slate-300', 'border-slate-700');
+
+                toggleBtn.classList.replace('bg-slate-100', 'bg-slate-800');
+                toggleBtn.classList.replace('border-slate-300', 'border-slate-700');
+                toggleBtn.classList.replace('text-slate-600', 'text-amber-500');
+                icon.className = "fa-solid fa-sun text-lg";
+
+                sUpload.classList.replace('bg-white', 'bg-slate-950');
+                sUpload.classList.replace('border-slate-200', 'border-slate-800');
+                uZone.classList.replace('bg-slate-50', 'bg-slate-900/50');
+                uZone.classList.replace('border-slate-200', 'border-slate-700');
+                uZoneText.classList.replace('text-slate-500', 'text-slate-400');
+
+                sInfo.classList.replace('bg-white', 'bg-slate-950');
+                sInfo.classList.replace('border-slate-200', 'border-slate-800');
+                instList.classList.replace('text-slate-600', 'text-slate-400');
+
+                sDiv.classList.replace('border-slate-200', 'border-slate-800');
+                sCardP.classList.replace('bg-slate-50', 'bg-slate-900');
+                sCardP.classList.replace('border-slate-200', 'border-slate-800');
+                sCardD.classList.replace('bg-slate-50', 'bg-slate-900');
+                sCardD.classList.replace('border-slate-200', 'border-slate-800');
+                sLabelP.classList.replace('text-slate-500', 'text-slate-400');
+                sLabelD.classList.replace('text-slate-500', 'text-slate-400');
+
+                cContainer.classList.replace('bg-white', 'bg-slate-950');
+                cContainer.classList.replace('border-slate-200', 'border-slate-800');
+                if (eTitle) eTitle.classList.replace('text-slate-700', 'text-slate-400');
+
+                footer.classList.replace('bg-white', 'bg-slate-950');
+                footer.classList.replace('border-t-slate-200', 'border-t-slate-900');
+
+                // Modal Dark Theme Revert
+                mContainer.classList.replace('bg-white', 'bg-slate-900');
+                mContainer.classList.replace('border-slate-200', 'border-slate-800');
+                mHeader.classList.replace('bg-slate-50', 'bg-slate-950');
+                mHeader.classList.replace('border-b-slate-200', 'border-b-slate-800');
+                mTitleT.classList.replace('text-slate-900', 'text-slate-100');
+                mSub.classList.replace('text-slate-500', 'text-slate-400');
+                mCloseX.classList.replace('text-slate-600', 'text-slate-400');
+                mCloseX.classList.replace('hover:text-slate-900', 'hover:text-slate-100');
+                lPinName.classList.replace('text-slate-700', 'text-slate-400');
+
+                mForm.classList.replace('bg-slate-50', 'bg-slate-950');
+                mForm.classList.replace('border-slate-200', 'border-slate-800/80');
+                lPhoto.classList.replace('text-slate-600', 'text-slate-400');
+                lListT.classList.replace('text-slate-700', 'text-slate-400');
+                mFooter.classList.replace('bg-slate-50', 'bg-slate-950');
+                mFooter.classList.replace('border-t-slate-200', 'border-t-slate-800');
+
+                bModClose.classList.replace('bg-slate-200', 'bg-slate-800');
+                bModClose.classList.replace('hover:bg-slate-300', 'hover:bg-slate-700');
+                bModClose.classList.replace('text-slate-700', 'text-slate-200');
+            }
+            // Κάνουμε ξανά render τη λίστα αν το modal είναι ανοιχτό για να πάρει το σωστό στυλ
+            if(activePinId) {
+                const pin = appState.pins.find(p => p.id === activePinId);
+                if(pin) renderTaskList(pin);
+            }
+        }
+
+
+        // --- BLUEPRINT & PINS MANAGEMENT ---
+
+        // Φόρτωση εικόνας κάτοψης (File Upload)
+        function loadBlueprint(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                appState.blueprintDataUrl = e.target.result;
+                
+                const img = document.getElementById('blueprintImg');
+                img.src = appState.blueprintDataUrl;
+                
+                document.getElementById('blueprintWrapper').classList.remove('hidden');
+                document.getElementById('emptyState').classList.add('hidden');
+                
+                saveToStorage();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Κλικ πάνω στην κάτοψη για δημιουργία Νέου Pin
+        // Οι συντεταγμένες υπολογίζονται σε σχέση με την ΦΥΣΙΚΗ εικόνα (πριν το transform),
+        // ώστε το pin να κρατά τη σωστή θέση ανεξάρτητα από zoom/rotate.
+        function handleCanvasClick(event) {
+            const img  = document.getElementById('blueprintImg');
+            const rect = img.getBoundingClientRect(); // bounding box μετά το CSS transform
+
+            // Κέντρο του transformed element
+            const cx = rect.left + rect.width  / 2;
+            const cy = rect.top  + rect.height / 2;
+
+            // Διανυσματική απόσταση κλικ από κέντρο (σε scaled pixels)
+            const dx = event.clientX - cx;
+            const dy = event.clientY - cy;
+
+            // Αναίρεση rotation (inverse rotate)
+            const rad = (-viewRotation * Math.PI) / 180;
+            const dxR = dx * Math.cos(rad) - dy * Math.sin(rad);
+            const dyR = dx * Math.sin(rad) + dy * Math.cos(rad);
+
+            // Αναίρεση scale — φυσικό μέγεθος εικόνας
+            const naturalW = img.naturalWidth  * viewScale;
+            const naturalH = img.naturalHeight * viewScale;
+            // ή πιο απλά: χρησιμοποιούμε rendered size προ-scale
+            const rendW = rect.width  / viewScale;
+            const rendH = rect.height / viewScale;
+
+            // Μετατροπή σε ποσοστό % του φυσικού rendered μεγέθους
+            const xPercent = ((dxR / viewScale) / rendW + 0.5) * 100;
+            const yPercent = ((dyR / viewScale) / rendH + 0.5) * 100;
+
+            // Αν το κλικ είναι εκτός ορίων, το αγνοούμε
+            if (xPercent < 0 || xPercent > 100 || yPercent < 0 || yPercent > 100) return;
+
+            const newPin = {
+                id: 'pin_' + Date.now(),
+                x: xPercent,
+                y: yPercent,
+                name: `Σημείο #${appState.pins.length + 1}`,
+                tasks: []
+            };
+
+            appState.pins.push(newPin);
+            saveToStorage();
+            renderPins();
+            openModal(newPin.id);
+        }
+
+        // Απόδοση (Render) των Pins στην οθόνη
+        function renderPins() {
+            const holder = document.getElementById('pinsHolder');
+            holder.innerHTML = '';
+
+            appState.pins.forEach(pin => {
+                const pinEl = document.createElement('div');
+                pinEl.style.left = pin.x + '%';
+                pinEl.style.top = pin.y + '%';
+                pinEl.style.position = 'absolute';
+                pinEl.style.transform = 'translate(-50%, -50%)';
+                
+                let pinColorClass = 'bg-red-500 border-red-200 text-white pulse-pin'; 
+                
+                if (pin.tasks.length > 0) {
+                    const allCompleted = pin.tasks.every(t => t.status === 'completed');
+                    const hasProgress = pin.tasks.some(t => t.status === 'progress');
+                    
+                    if (allCompleted) {
+                        pinColorClass = 'bg-green-600 border-green-300 text-white';
+                    } else if (hasProgress) {
+                        pinColorClass = 'bg-amber-500 border-amber-200 text-slate-950';
+                    }
+                } else {
+                    pinColorClass = 'bg-slate-500 border-slate-300 text-white';
+                }
+
+                pinEl.className = `w-7 h-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold cursor-pointer select-none pointer-events-auto shadow-xl transition hover:scale-125 z-10 ${pinColorClass}`;
+                pinEl.innerHTML = `<i class="fa-solid fa-location-dot"></i>`;
+                pinEl.title = pin.name;
+                
+                pinEl.onclick = (e) => {
+                    e.stopPropagation(); 
+                    openModal(pin.id);
+                };
+
+                holder.appendChild(pinEl);
+            });
+        }
+
+
+        // --- MODAL & TASKS MANAGEMENT ---
+
+        function openModal(pinId) {
+            activePinId = pinId;
+            const pin = appState.pins.find(p => p.id === pinId);
+            if (!pin) return;
+
+            document.getElementById('pinNameInput').value = pin.name;
+            document.getElementById('modalTitle').innerText = pin.name;
+            
+            // Καθαρισμός φόρμας
+            document.getElementById('taskDesc').value = '';
+            document.getElementById('taskOwner').value = '';
+            document.getElementById('taskStatus').value = 'pending';
+            document.getElementById('taskPhoto').value = ''; // Clear photo input
+
+            renderTaskList(pin);
+            document.getElementById('taskModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('taskModal').classList.add('hidden');
+            activePinId = null;
+            renderPins(); 
+        }
+
+        function updatePinName() {
+            if (!activePinId) return;
+            const pin = appState.pins.find(p => p.id === activePinId);
+            if (pin) {
+                const newName = document.getElementById('pinNameInput').value.trim();
+                pin.name = newName || `Σημείο`;
+                document.getElementById('modalTitle').innerText = pin.name;
+                saveToStorage();
+            }
+        }
+
+        // Προσθήκη νέου Task (με υποστήριξη Πολλαπλών Φωτογραφιών Base64)
+        function addTask() {
+            if (!activePinId) return;
+            const desc   = document.getElementById('taskDesc').value.trim();
+            const owner  = document.getElementById('taskOwner').value.trim();
+            const status = document.getElementById('taskStatus').value;
+            const photoInput = document.getElementById('taskPhoto');
+
+            if (!desc) { alert('Παρακαλώ εισάγετε μια περιγραφή εργασίας.'); return; }
+
+            const pin = appState.pins.find(p => p.id === activePinId);
+            if (!pin) return;
+
+            const newTaskObj = {
+                id:     'task_' + Date.now(),
+                desc:   desc,
+                owner:  owner || 'Γενικό Συνεργείο',
+                status: status,
+                photo:  "",   // legacy — 1η φωτό για συμβατότητα
+                photos: []    // νέο array πολλαπλών φωτογραφιών
+            };
+
+            const files = photoInput.files ? Array.from(photoInput.files) : [];
+
+            if (files.length > 0) {
+                let loaded = 0;
+                files.forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        newTaskObj.photos.push(e.target.result);
+                        loaded++;
+                        if (loaded === files.length) {
+                            newTaskObj.photo = newTaskObj.photos[0];
+                            pin.tasks.push(newTaskObj);
+                            saveToStorage(); renderTaskList(pin); resetTaskForm();
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                });
+            } else {
+                pin.tasks.push(newTaskObj);
+                saveToStorage(); renderTaskList(pin); resetTaskForm();
+            }
+        }
+
+        // Υποβοηθητική συνάρτηση για καθαρισμό φόρμας
+        function resetTaskForm() {
+            document.getElementById('taskDesc').value = '';
+            document.getElementById('taskOwner').value = '';
+            document.getElementById('taskStatus').value = 'pending';
+            document.getElementById('taskPhoto').value = '';
+            document.getElementById('taskDesc').focus();
+        }
+
+        // Εμφάνιση των tasks στο modal (Προσαρμοσμένο για Light / Dark Mode και Φωτογραφίες)
+        function renderTaskList(pin) {
+            const listEl = document.getElementById('taskList');
+            document.getElementById('modalTaskCount').innerText = pin.tasks.length;
+            listEl.innerHTML = '';
+
+            if (pin.tasks.length === 0) {
+                listEl.innerHTML = `<p class="text-xs text-slate-500 text-center py-4 italic">Καμία καταγεγραμμένη εργασία για το σημείο.</p>`;
+                return;
+            }
+
+            const isLight = appState.theme === "light";
+            const itemBg = isLight ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-950 border-slate-850 text-slate-200';
+            const subTextCol = isLight ? 'text-slate-500' : 'text-slate-400';
+            const selectBg = isLight ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-slate-900 border-slate-800 text-slate-300';
+
+            pin.tasks.forEach(task => {
+                const item = document.createElement('div');
+                item.className = `${itemBg} p-3 rounded-lg border flex justify-between items-center gap-3 text-xs`;
+                
+                let statusBadge = '';
+                if(task.status === 'completed') statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">Ολοκληρώθηκε</span>';
+                else if(task.status === 'progress') statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">Σε εξέλιξη</span>';
+                else statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">Εκκρεμεί</span>';
+
+                // Φωτογραφίες: υποστήριξη νέου array photos[] και legacy single photo
+                let photoHtml = '';
+                const photoSrcs = (task.photos && task.photos.length > 0)
+                    ? task.photos
+                    : (task.photo ? [task.photo] : []);
+                if (photoSrcs.length > 0) {
+                    const thumbs = photoSrcs.map((src, i) => `
+                        <div class="relative w-12 h-12 rounded border border-slate-700 overflow-hidden flex-shrink-0 cursor-pointer group" onclick="openLightbox('${src}')" title="Φωτογραφία ${i+1}">
+                            <img src="${src}" class="w-full h-full object-cover group-hover:scale-110 transition">
+                            <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-[10px] text-white">
+                                <i class="fa-solid fa-eye"></i>
+                            </div>
+                        </div>`).join('');
+                    photoHtml = `<div class="flex gap-1 flex-wrap flex-shrink-0">${thumbs}</div>`;
+                }
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-3 flex-1 overflow-hidden">
+                        ${photoHtml}
+                        <div class="flex-1 min-w-0 space-y-1">
+                            <p class="font-medium truncate">${task.desc}</p>
+                            <div class="flex flex-wrap items-center gap-2 text-[11px] ${subTextCol}">
+                                <span class="flex items-center gap-1"><i class="fa-solid fa-user opacity-60"></i> ${task.owner}</span>
+                                <span>&bull;</span>
+                                ${statusBadge}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <select onchange="changeTaskStatus('${task.id}', this.value)" class="${selectBg} border rounded px-1.5 py-1 text-xs focus:outline-none focus:border-amber-500">
+                            <option value="pending" ${task.status === 'pending' ? 'selected' : ''}>Εκκρεμεί</option>
+                            <option value="progress" ${task.status === 'progress' ? 'selected' : ''}>Σε εξέλιξη</option>
+                            <option value="completed" ${task.status === 'completed' ? 'selected' : ''}>Ολοκληρώθηκε</option>
+                        </select>
+                        <button onclick="deleteTask('${task.id}')" class="text-slate-500 hover:text-red-500 p-1 transition cursor-pointer" title="Διαγραφή">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                `;
+                listEl.appendChild(item);
+            });
+        }
+
+        function changeTaskStatus(taskId, newStatus) {
+            if (!activePinId) return;
+            const pin = appState.pins.find(p => p.id === activePinId);
+            if (pin) {
+                const task = pin.tasks.find(t => t.id === taskId);
+                if (task) {
+                    task.status = newStatus;
+                    saveToStorage();
+                    renderTaskList(pin);
+                }
+            }
+        }
+
+        function deleteTask(taskId) {
+            if (!activePinId) return;
+            const pin = appState.pins.find(p => p.id === activePinId);
+            if (pin) {
+                pin.tasks = pin.tasks.filter(t => t.id !== taskId);
+                saveToStorage();
+                renderTaskList(pin);
+            }
+        }
+
+        function deletePin() {
+            if (!activePinId) return;
+            if (confirm('Είστε βέβαιοι ότι θέλετε να διαγράψετε αυτό το σημείο και όλες τις εργασίες/φωτογραφίες του;')) {
+                appState.pins = appState.pins.filter(p => p.id !== activePinId);
+                saveToStorage();
+                closeModal();
+            }
+        }
+
+
+        // --- LIGHTBOX VISUAL LOGIC ---
+        function openLightbox(base64Src) {
+            const lightbox = document.getElementById('lightboxModal');
+            const img = document.getElementById('lightboxImg');
+            img.src = base64Src;
+            lightbox.classList.remove('hidden');
+        }
+
+        function closeLightbox() {
+            document.getElementById('lightboxModal').classList.add('hidden');
+            document.getElementById('lightboxImg').src = "";
+        }
+
+
+        // --- GLOBAL STATS & UTILITIES ---
+
+        function updateGlobalStats() {
+            let pending = 0;
+            let completed = 0;
+
+            appState.pins.forEach(pin => {
+                if (pin.tasks.length > 0 && pin.tasks.every(t => t.status === 'completed')) {
+                    completed++;
+                } else {
+                    pending++;
+                }
+            });
+
+            document.getElementById('pendingPinsCount').innerText = pending;
+            document.getElementById('completedPinsCount').innerText = completed;
+        }
+
+        function clearAllData() {
+            if (confirm('ΠΡΟΣΟΧΗ! Θα διαγραφούν οριστικά όλα τα δεδομένα, οι φωτογραφίες και το σχέδιο. Θέλετε να συνεχίσετε;')) {
+                localStorage.removeItem('siteSpice_blueprint_data');
+                const currentTheme = appState.theme; // Κρατάμε το theme
+                appState = { blueprintDataUrl: "", pins: [], theme: currentTheme };
+                document.getElementById('blueprintImg').src = "";
+                document.getElementById('blueprintWrapper').classList.add('hidden');
+                document.getElementById('emptyState').classList.remove('hidden');
+                renderPins();
+                updateGlobalStats();
+            }
+        }
+
+        // Export JSON (Περιλαμβάνει πλέον και τα Base64 strings των φωτογραφιών)
+        function exportData() {
+            if (appState.pins.length === 0 && !appState.blueprintDataUrl) {
+                alert('Δεν υπάρχουν δεδομένα προς εξαγωγή.');
+                return;
+            }
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `SiteSpice_AsBuilt_Data_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        // =====================================================
+        // ΕΞΑΓΩΓΗ PDF
+        // =====================================================
+        function exportPDF() {
+            const report = document.getElementById('pdf-report');
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('el-GR', { day:'2-digit', month:'2-digit', year:'numeric' });
+            const timeStr = now.toLocaleTimeString('el-GR', { hour:'2-digit', minute:'2-digit' });
+
+            let total = 0, done = 0, prog = 0, pend = 0;
+            appState.pins.forEach(p => p.tasks.forEach(t => {
+                total++;
+                if (t.status === 'completed') done++;
+                else if (t.status === 'progress') prog++;
+                else pend++;
+            }));
+
+            let html = `<h2>📋 Αναφορά Εργασιών Κατόψεως — SiteSpice</h2>
+                <div style="font-size:11px;color:#64748b;margin-bottom:14px;">
+                    Ημερομηνία: <strong>${dateStr} ${timeStr}</strong> &nbsp;|&nbsp;
+                    Σημεία: <strong>${appState.pins.length}</strong> &nbsp;|&nbsp;
+                    Εργασίες: <strong>${total}</strong> &nbsp;|&nbsp;
+                    <span style="color:#b91c1c">Εκκρεμείς: <strong>${pend}</strong></span> &nbsp;|&nbsp;
+                    <span style="color:#92400e">Σε εξέλιξη: <strong>${prog}</strong></span> &nbsp;|&nbsp;
+                    <span style="color:#15803d">Ολοκληρωμένες: <strong>${done}</strong></span>
+                </div>`;
+
+            if (appState.pins.length === 0) {
+                html += '<p style="font-size:11px;color:#94a3b8;font-style:italic;">Δεν υπάρχουν καταγεγραμμένα σημεία.</p>';
+            } else {
+                appState.pins.forEach(pin => {
+                    html += `<div class="pdf-pin-block"><div class="pdf-pin-title">📍 ${pin.name}</div>`;
+                    if (pin.tasks.length === 0) {
+                        html += `<div style="font-size:11px;color:#94a3b8;font-style:italic;padding:4px 0;">Χωρίς εργασίες.</div>`;
+                    } else {
+                        pin.tasks.forEach(t => {
+                            const lbl = t.status==='completed'?'Ολοκληρώθηκε':t.status==='progress'?'Σε εξέλιξη':'Εκκρεμεί';
+                            const cls = t.status==='completed'?'pdf-s-done':t.status==='progress'?'pdf-s-progress':'pdf-s-pending';
+                            const srcs = (t.photos && t.photos.length > 0) ? t.photos : (t.photo ? [t.photo] : []);
+                            const photosHtml = srcs.length > 0
+                                ? `<div class="pdf-photos">${srcs.map(s=>`<img src="${s}" alt="φωτό">`).join('')}</div>` : '';
+                            html += `<div class="pdf-task-row">
+                                <strong>${t.desc}</strong><span class="pdf-status ${cls}">${lbl}</span><br>
+                                <span style="color:#64748b;font-size:10px;">👤 ${t.owner}</span>${photosHtml}
+                            </div>`;
+                        });
+                    }
+                    html += `</div>`;
+                });
+            }
+            html += `<div class="pdf-footer-ln">&copy; 2026 ΓΚΑΡΙΠΗΣ ΓΙΩΡΓΟΣ &bull; SiteSpice Management System &bull; ΜΕ ΕΠΙΦΥΛΑΞΗ ΠΑΝΤΟΣ ΝΟΜΙΜΟΥ ΔΙΚΑΙΩΜΑΤΟΣ</div>`;
+            report.innerHTML = html;
+            window.print();
+        }
+
+        // Import JSON
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed.pins && Array.isArray(parsed.pins)) {
+                        appState = parsed;
+                        if (!appState.theme) appState.theme = "dark";
+                        
+                        saveToStorage();
+                        applyTheme(appState.theme);
+                        
+                        if (appState.blueprintDataUrl) {
+                            const img = document.getElementById('blueprintImg');
+                            img.src = appState.blueprintDataUrl;
+                            document.getElementById('blueprintWrapper').classList.remove('hidden');
+                            document.getElementById('emptyState').classList.add('hidden');
+                        }
+                        
+                        renderPins();
+                        updateGlobalStats();
+                        alert('Επιτυχής εισαγωγή και συγχρονισμός δεδομένων!');
+                    } else {
+                        alert('Μη έγκυρη δομή αρχείου JSON.');
+                    }
+                } catch (err) {
+                    alert('Σφάλμα κατά την ανάγνωση του αρχείου.');
+                    console.error(err);
+                }
+            };
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html>
