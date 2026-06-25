@@ -188,21 +188,25 @@
                 <div class="w-px h-5 bg-slate-700"></div>
                 <span class="text-[11px] text-slate-400 min-w-[70px]" id="transformLabel">100% · 0°</span>
                 <div class="flex-1"></div>
-                <span class="text-[10px] text-slate-600 italic">Scroll=zoom &nbsp;|&nbsp; Σύρσιμο=μετακίνηση</span>
+                <span class="text-[10px] text-slate-500 italic">Scroll=zoom &nbsp;|&nbsp; Μπάρες/trackpad=μετακίνηση</span>
             </div>
 
-            <!-- Canvas -->
-            <div class="bg-slate-950 border border-slate-800 rounded-xl shadow-lg overflow-hidden relative min-h-[500px] max-h-[78vh] transition-colors duration-300" id="canvasContainer"
-                 style="cursor:grab;">
-                <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-8 text-center pointer-events-none">
-                    <i class="fa-solid fa-drafting-compass text-6xl mb-4 text-slate-700"></i>
+            <!-- Canvas — overflow scroll για μετακίνηση όταν το σχέδιο είναι μεγαλύτερο -->
+            <div class="bg-slate-50 border border-slate-200 rounded-xl shadow-lg transition-colors duration-300"
+                 id="canvasContainer"
+                 style="overflow:auto; min-height:500px; max-height:78vh; position:relative;">
+
+                <!-- Empty state -->
+                <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-8 text-center pointer-events-none" style="min-height:500px;">
+                    <i class="fa-solid fa-drafting-compass text-6xl mb-4 text-slate-300"></i>
                     <h4 class="text-lg font-semibold text-slate-400" id="emptyStateTitle">Δεν έχει φορτωθεί σχέδιο</h4>
                     <p class="text-sm text-slate-500 max-w-sm mt-1">Ανεβάστε μια κάτοψη από το αριστερό panel για να ξεκινήσει η ψηφιακή καταγραφή.</p>
                 </div>
-                <!-- Το transform container επιτρέπει zoom + rotate + translate (pan) -->
-                <div id="transformContainer" style="position:absolute; top:50%; left:50%; transform-origin:center center; transition:none;">
-                    <div id="blueprintWrapper" class="relative hidden inline-block select-none" style="transform:translate(-50%,-50%);">
-                        <img id="blueprintImg" src="" alt="Blueprint" class="block h-auto rounded-lg" style="max-width:none;">
+
+                <!-- Scroll inner — το σχέδιο μεγαλώνει/μικραίνει εδώ, οι μπάρες εμφανίζονται αυτόματα -->
+                <div id="scrollInner" style="display:none; padding:20px; min-width:100%; min-height:100%;">
+                    <div id="blueprintWrapper" class="relative inline-block select-none" style="transform-origin:top left;">
+                        <img id="blueprintImg" src="" alt="Blueprint" class="block rounded-lg" style="transform-origin:top left; display:block;">
                         <div id="pinsHolder" class="absolute inset-0 pointer-events-none"></div>
                     </div>
                 </div>
@@ -304,76 +308,84 @@
         let activePinId = null;
 
         // ============================================================
-        // ZOOM / ROTATE / PAN STATE
+        // ZOOM / ROTATE STATE — χρησιμοποιούμε CSS transform στο blueprintWrapper
+        // Η μετακίνηση γίνεται με τις scroll μπάρες του canvasContainer (overflow:auto)
         // ============================================================
         let viewScale    = 1.0;
         let viewRotation = 0;
-        let panX = 0, panY = 0;          // translate offset σε px
-        let isPanning    = false;
-        let panStartX    = 0, panStartY = 0;
 
-        function applyTransform(animate) {
-            const tc = document.getElementById('transformContainer');
-            if (!tc) return;
-            tc.style.transition = animate ? 'transform .2s ease' : 'none';
-            tc.style.transform  = `translate(${panX}px, ${panY}px) scale(${viewScale}) rotate(${viewRotation}deg)`;
+        function applyTransform() {
+            const wrapper = document.getElementById('blueprintWrapper');
+            if (!wrapper) return;
+            wrapper.style.transform = `scale(${viewScale}) rotate(${viewRotation}deg)`;
+            // Προσαρμόζουμε το μέγεθος του scrollInner ώστε οι μπάρες να εμφανίζονται σωστά
+            updateScrollInnerSize();
             document.getElementById('transformLabel').textContent =
                 `${Math.round(viewScale * 100)}% · ${viewRotation}°`;
         }
 
+        function updateScrollInnerSize() {
+            const img = document.getElementById('blueprintImg');
+            const si  = document.getElementById('scrollInner');
+            if (!img || !si || !img.naturalWidth) return;
+            // Υπολογισμός πραγματικού μεγέθους μετά το transform
+            const rad  = viewRotation * Math.PI / 180;
+            const cosA = Math.abs(Math.cos(rad));
+            const sinA = Math.abs(Math.sin(rad));
+            const bw   = img.offsetWidth  * cosA + img.offsetHeight * sinA;
+            const bh   = img.offsetWidth  * sinA + img.offsetHeight * cosA;
+            si.style.width  = Math.ceil(bw * viewScale + 40) + 'px';
+            si.style.height = Math.ceil(bh * viewScale + 40) + 'px';
+        }
+
         function adjustZoom(delta) {
-            viewScale = Math.min(6, Math.max(0.15, viewScale + delta));
-            applyTransform(true);
+            viewScale = Math.min(6, Math.max(0.1, viewScale + delta));
+            applyTransform();
         }
 
         function adjustRotate(deg) {
             viewRotation = (viewRotation + deg + 360) % 360;
-            applyTransform(true);
+            applyTransform();
         }
 
         function resetTransform() {
-            viewScale = 1.0; viewRotation = 0; panX = 0; panY = 0;
-            applyTransform(true);
+            viewScale    = 1.0;
+            viewRotation = 0;
+            applyTransform();
+            // Επαναφορά scroll στο κέντρο
+            centerCanvas();
         }
 
-        // Wheel zoom
+        // Κεντράρισμα του canvas scroll μετά το φόρτωμα εικόνας
+        function centerCanvas() {
+            const cc = document.getElementById('canvasContainer');
+            const si = document.getElementById('scrollInner');
+            if (!cc || !si) return;
+            setTimeout(() => {
+                cc.scrollLeft = (si.scrollWidth  - cc.clientWidth)  / 2;
+                cc.scrollTop  = (si.scrollHeight - cc.clientHeight) / 2;
+            }, 50);
+        }
+
+        // Wheel zoom πάνω στο canvas
         document.addEventListener('DOMContentLoaded', () => {
             const cc = document.getElementById('canvasContainer');
             cc.addEventListener('wheel', (e) => {
-                if (document.getElementById('blueprintWrapper').classList.contains('hidden')) return;
+                if (document.getElementById('blueprintImg').src === '') return;
                 e.preventDefault();
-                adjustZoom(e.deltaY < 0 ? 0.1 : -0.1);
+                const delta = e.deltaY < 0 ? 0.1 : -0.1;
+                // Zoom προς το σημείο του cursor
+                const rect     = cc.getBoundingClientRect();
+                const mouseX   = e.clientX - rect.left + cc.scrollLeft;
+                const mouseY   = e.clientY - rect.top  + cc.scrollTop;
+                const oldScale = viewScale;
+                viewScale      = Math.min(6, Math.max(0.1, viewScale + delta));
+                applyTransform();
+                // Διατηρούμε το σημείο zoom κεντραρισμένο
+                cc.scrollLeft += mouseX * (viewScale / oldScale - 1);
+                cc.scrollTop  += mouseY * (viewScale / oldScale - 1);
             }, { passive: false });
-
-            // Pan: mousedown/move/up στο canvasContainer
-            cc.addEventListener('mousedown', startPan);
-            cc.addEventListener('mousemove', doPan);
-            cc.addEventListener('mouseup',   endPan);
-            cc.addEventListener('mouseleave',endPan);
-
-            // Touch pan
-            cc.addEventListener('touchstart', (e) => { if(e.touches.length===1) { startPan(e.touches[0]); } }, {passive:true});
-            cc.addEventListener('touchmove',  (e) => { if(e.touches.length===1) { doPan(e.touches[0]); e.preventDefault(); } }, {passive:false});
-            cc.addEventListener('touchend',   endPan, {passive:true});
         });
-
-        function startPan(e) {
-            if (document.getElementById('blueprintWrapper').classList.contains('hidden')) return;
-            isPanning  = true;
-            panStartX  = e.clientX - panX;
-            panStartY  = e.clientY - panY;
-            document.getElementById('canvasContainer').style.cursor = 'grabbing';
-        }
-        function doPan(e) {
-            if (!isPanning) return;
-            panX = e.clientX - panStartX;
-            panY = e.clientY - panStartY;
-            applyTransform(false);
-        }
-        function endPan() {
-            isPanning = false;
-            document.getElementById('canvasContainer').style.cursor = 'grab';
-        }
 
         // ============================================================
         // INIT from localStorage
@@ -390,8 +402,19 @@
                     if (appState.blueprintDataUrl) {
                         const img = document.getElementById('blueprintImg');
                         img.src = appState.blueprintDataUrl;
-                        document.getElementById('blueprintWrapper').classList.remove('hidden');
-                        document.getElementById('emptyState').classList.add('hidden');
+                        img.onload = () => {
+                            const cc     = document.getElementById('canvasContainer');
+                            const scaleW = (cc.clientWidth  - 40) / img.naturalWidth;
+                            const scaleH = (cc.clientHeight - 40) / img.naturalHeight;
+                            viewScale    = Math.min(scaleW, scaleH, 1);
+                            viewRotation = 0;
+                            img.style.width  = img.naturalWidth  + 'px';
+                            img.style.height = img.naturalHeight + 'px';
+                            applyTransform();
+                            centerCanvas();
+                        };
+                        document.getElementById('scrollInner').style.display = 'block';
+                        document.getElementById('emptyState').style.display  = 'none';
                     }
                     if (appState.logoDataUrl)   setLogoDisplay(appState.logoDataUrl);
                     if (appState.projectName)   document.getElementById('projectNameInput').value = appState.projectName;
@@ -508,7 +531,7 @@
                 cr(els.sCardP,'bg-slate-900','bg-slate-50'); cr(els.sCardP,'border-slate-800','border-slate-200');
                 cr(els.sCardD,'bg-slate-900','bg-slate-50'); cr(els.sCardD,'border-slate-800','border-slate-200');
                 cr(els.sLabelP,'text-slate-400','text-slate-500'); cr(els.sLabelD,'text-slate-400','text-slate-500');
-                cr(els.cContainer,'bg-slate-950','bg-white'); cr(els.cContainer,'border-slate-800','border-slate-200');
+                cr(els.cContainer,'bg-slate-950','bg-slate-50'); cr(els.cContainer,'border-slate-800','border-slate-200');
                 if(els.eTitle) cr(els.eTitle,'text-slate-400','text-slate-700');
                 cr(els.footer,'bg-slate-950','bg-white');
                 if(els.mContainer){ cr(els.mContainer,'bg-slate-900','bg-white'); cr(els.mContainer,'border-slate-800','border-slate-200'); }
@@ -539,7 +562,7 @@
                 cr(els.sCardP,'bg-slate-50','bg-slate-900'); cr(els.sCardP,'border-slate-200','border-slate-800');
                 cr(els.sCardD,'bg-slate-50','bg-slate-900'); cr(els.sCardD,'border-slate-200','border-slate-800');
                 cr(els.sLabelP,'text-slate-500','text-slate-400'); cr(els.sLabelD,'text-slate-500','text-slate-400');
-                cr(els.cContainer,'bg-white','bg-slate-950'); cr(els.cContainer,'border-slate-200','border-slate-800');
+                cr(els.cContainer,'bg-slate-50','bg-slate-950'); cr(els.cContainer,'border-slate-200','border-slate-800');
                 if(els.eTitle) cr(els.eTitle,'text-slate-700','text-slate-400');
                 cr(els.footer,'bg-white','bg-slate-950');
                 if(els.mContainer){ cr(els.mContainer,'bg-white','bg-slate-900'); cr(els.mContainer,'border-slate-200','border-slate-800'); }
@@ -571,17 +594,20 @@
                 appState.blueprintDataUrl = e.target.result;
                 const img = document.getElementById('blueprintImg');
                 img.src = appState.blueprintDataUrl;
-                // Φορτώνουμε φυσικές διαστάσεις για να ορίσουμε αρχικό zoom
                 img.onload = () => {
-                    const cc = document.getElementById('canvasContainer');
-                    const scaleW = cc.clientWidth  / img.naturalWidth;
-                    const scaleH = cc.clientHeight / img.naturalHeight;
-                    viewScale = Math.min(scaleW, scaleH, 1) * 0.95;
-                    panX = 0; panY = 0; viewRotation = 0;
-                    applyTransform(true);
+                    // Αυτόματο zoom ώστε η εικόνα να χωράει στο container
+                    const cc   = document.getElementById('canvasContainer');
+                    const scaleW = (cc.clientWidth  - 40) / img.naturalWidth;
+                    const scaleH = (cc.clientHeight - 40) / img.naturalHeight;
+                    viewScale    = Math.min(scaleW, scaleH, 1);
+                    viewRotation = 0;
+                    img.style.width  = img.naturalWidth  + 'px';
+                    img.style.height = img.naturalHeight + 'px';
+                    applyTransform();
+                    centerCanvas();
                 };
-                document.getElementById('blueprintWrapper').classList.remove('hidden');
-                document.getElementById('emptyState').classList.add('hidden');
+                document.getElementById('scrollInner').style.display = 'block';
+                document.getElementById('emptyState').style.display  = 'none';
                 saveToStorage();
             };
             reader.readAsDataURL(file);
@@ -597,31 +623,12 @@
         });
 
         function handleCanvasClick(event) {
-            // Αν το mouse κινήθηκε >5px θεωρούμε pan, όχι κλικ
-            if (Math.abs(event.movementX) > 5 || Math.abs(event.movementY) > 5) return;
-
             const img  = document.getElementById('blueprintImg');
             const rect = img.getBoundingClientRect();
 
-            // Κέντρο του transformed img
-            const cx = rect.left + rect.width  / 2;
-            const cy = rect.top  + rect.height / 2;
-
-            // Διάνυσμα κλικ από κέντρο
-            const dx = event.clientX - cx;
-            const dy = event.clientY - cy;
-
-            // Αντίστροφη rotation
-            const rad = (-viewRotation * Math.PI) / 180;
-            const dxR = dx * Math.cos(rad) - dy * Math.sin(rad);
-            const dyR = dx * Math.sin(rad) + dy * Math.cos(rad);
-
-            // Rendered φυσικό μέγεθος (πριν το scale)
-            const rendW = rect.width  / viewScale;
-            const rendH = rect.height / viewScale;
-
-            const xPct = ((dxR / viewScale) / rendW + 0.5) * 100;
-            const yPct = ((dyR / viewScale) / rendH + 0.5) * 100;
+            // Ποσοστιαίες συντεταγμένες πάνω στην εικόνα όπως φαίνεται (μετά scale)
+            const xPct = ((event.clientX - rect.left) / rect.width)  * 100;
+            const yPct = ((event.clientY - rect.top)  / rect.height) * 100;
 
             if (xPct < 0 || xPct > 100 || yPct < 0 || yPct > 100) return;
 
@@ -921,8 +928,8 @@
                 appState = { blueprintDataUrl:"", pins:[], theme, logoDataUrl:"", projectName:"" };
                 localStorage.removeItem('siteSpice_blueprint_data');
                 document.getElementById('blueprintImg').src = '';
-                document.getElementById('blueprintWrapper').classList.add('hidden');
-                document.getElementById('emptyState').classList.remove('hidden');
+                document.getElementById('scrollInner').style.display = 'none';
+                document.getElementById('emptyState').style.display  = '';
                 renderPins(); updateGlobalStats();
             }
         }
@@ -966,9 +973,21 @@
                         saveToStorage();
                         applyTheme(appState.theme);
                         if (appState.blueprintDataUrl) {
-                            document.getElementById('blueprintImg').src = appState.blueprintDataUrl;
-                            document.getElementById('blueprintWrapper').classList.remove('hidden');
-                            document.getElementById('emptyState').classList.add('hidden');
+                            const img = document.getElementById('blueprintImg');
+                            img.src = appState.blueprintDataUrl;
+                            img.onload = () => {
+                                const cc     = document.getElementById('canvasContainer');
+                                const scaleW = (cc.clientWidth  - 40) / img.naturalWidth;
+                                const scaleH = (cc.clientHeight - 40) / img.naturalHeight;
+                                viewScale    = Math.min(scaleW, scaleH, 1);
+                                viewRotation = 0;
+                                img.style.width  = img.naturalWidth  + 'px';
+                                img.style.height = img.naturalHeight + 'px';
+                                applyTransform();
+                                centerCanvas();
+                            };
+                            document.getElementById('scrollInner').style.display = 'block';
+                            document.getElementById('emptyState').style.display  = 'none';
                         }
                         if (appState.logoDataUrl)   setLogoDisplay(appState.logoDataUrl);
                         if (appState.projectName)   document.getElementById('projectNameInput').value = appState.projectName;
