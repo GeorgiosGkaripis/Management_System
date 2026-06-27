@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Management System v5</title>
+    <title>Management System v17</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -12,13 +12,31 @@
         ::-webkit-scrollbar-track { background: var(--scroll-track, #0f172a); }
         ::-webkit-scrollbar-thumb { background: #d97706; border-radius: 3px; }
         
-        /* Pulse εφέ για τα εκκρεμή pins */
-        @keyframes pin-pulse {
-            0% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-            70% { transform: translate(-50%, -50%) scale(1.1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-            100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        /* Pulse εφέ για pins — αναβοσβήνουν για εύκολο εντοπισμό */
+        @keyframes pulse-red {
+            0%   { box-shadow: 0 0 0 0   rgba(239,68,68,0.8); }
+            70%  { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+            100% { box-shadow: 0 0 0 0   rgba(239,68,68,0); }
         }
-        .pulse-pin { animation: pin-pulse 2s infinite; }
+        @keyframes pulse-amber {
+            0%   { box-shadow: 0 0 0 0   rgba(245,158,11,0.8); }
+            70%  { box-shadow: 0 0 0 10px rgba(245,158,11,0); }
+            100% { box-shadow: 0 0 0 0   rgba(245,158,11,0); }
+        }
+        @keyframes pulse-green {
+            0%   { box-shadow: 0 0 0 0   rgba(22,163,74,0.8); }
+            70%  { box-shadow: 0 0 0 10px rgba(22,163,74,0); }
+            100% { box-shadow: 0 0 0 0   rgba(22,163,74,0); }
+        }
+        @keyframes pulse-slate {
+            0%   { box-shadow: 0 0 0 0   rgba(100,116,139,0.8); }
+            70%  { box-shadow: 0 0 0 10px rgba(100,116,139,0); }
+            100% { box-shadow: 0 0 0 0   rgba(100,116,139,0); }
+        }
+        .pulse-red   { animation: pulse-red   1.8s ease-in-out infinite; }
+        .pulse-amber { animation: pulse-amber 1.8s ease-in-out infinite; }
+        .pulse-green { animation: pulse-green 2.4s ease-in-out infinite; }
+        .pulse-slate { animation: pulse-slate 2.4s ease-in-out infinite; }
 
         /* CSS Variables */
         :root { --scroll-track: #0f172a; }
@@ -34,29 +52,58 @@
         .ctl-btn:hover { background:#334155; color:#f59e0b; }
 
         /* Pan cursor */
-        #blueprintImg.panning { cursor: grabbing !important; }
         #blueprintImg { cursor: crosshair; }
 
         /* PDF print */
         @media print {
             * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
-            body { background:#fff !important; color:#0f172a !important; }
+
+            /* Οριζόντια σελίδα από προεπιλογή */
+            @page { size: A4 landscape; margin: 10mm; }
+            @page :first { size: A4 landscape; margin: 10mm; }
+
+            body { background:#fff !important; color:#0f172a !important; margin:0; padding:0; }
+
+            /* Κρύβουμε όλο το UI */
             header, #canvasToolbar, #sidebarUploadBox, #sidebarInfoBox,
-            #taskModal, #lightboxModal, #appFooter { display:none !important; }
-            main { display:block !important; padding:0 !important; }
-            .lg\:col-span-1 { display:none !important; }
-            .lg\:col-span-3 { display:block !important; width:100% !important; }
-            #canvasOuterWrap { flex-direction:column !important; }
-            #canvasContainer { max-height:none !important; overflow:visible !important; border:none !important; background:#fff !important; box-shadow:none !important; min-height:unset !important; }
-            #transformContainer { transform:none !important; }
-            #blueprintWrapper, #blueprintImg { max-width:100% !important; width:100% !important; }
+            #taskModal, #lightboxModal, #appFooter, main { display:none !important; }
+
+            /* Εμφανίζουμε μόνο το pdf-report */
             #pdf-report { display:block !important; }
+
+            /* Σελίδα 1: εξώφυλλο + σχέδιο */
+            .pdf-cover {
+                page-break-after: always;
+                width:100%;
+                display:flex; flex-direction:column;
+                align-items:center; justify-content:flex-start;
+                text-align:center;
+                padding-top: 10mm;
+            }
+            .pdf-cover-title {
+                font-size:28px; font-weight:900; color:#0f172a;
+                margin-bottom:8px; letter-spacing:0.05em;
+            }
+            .pdf-cover-sub {
+                font-size:13px; color:#64748b; margin-bottom:16px;
+            }
+            .pdf-cover-blueprint {
+                width:100%; max-height:200mm;
+                object-fit:contain; border:1px solid #e2e8f0; border-radius:6px;
+            }
+
+            /* Σελίδες 2+: αναφορά εργασιών */
+            .pdf-report-section { page-break-before:always; }
+            .pdf-pin-block { page-break-inside:avoid; }
         }
         /* PDF report */
         #pdf-report { display:none; font-family:'Segoe UI',system-ui,sans-serif; color:#0f172a; padding:20px 24px; }
         #pdf-report h2 { font-size:15px; font-weight:700; border-bottom:2px solid #d97706; padding-bottom:6px; margin-bottom:12px; }
         .pdf-pin-block { margin-bottom:16px; page-break-inside:avoid; }
-        .pdf-pin-title { font-size:13px; font-weight:700; color:#d97706; margin-bottom:6px; }
+        .pdf-pin-header { display:flex; align-items:flex-start; gap:12px; margin-bottom:6px; }
+        .pdf-pin-title { font-size:13px; font-weight:700; color:#d97706; flex:1; padding-top:2px; }
+        .pdf-pin-photos { display:flex; gap:5px; flex-wrap:wrap; }
+        .pdf-pin-photos img { width:60px; height:50px; object-fit:cover; border-radius:4px; border:1px solid #e2e8f0; }
         .pdf-task-row  { font-size:11px; border:1px solid #e2e8f0; border-radius:4px; padding:8px 10px; margin-bottom:5px; background:#f8fafc; }
         .pdf-st        { font-size:10px; font-weight:700; padding:1px 6px; border-radius:3px; display:inline-block; margin-left:6px; }
         .pdf-st-p  { background:#fee2e2; color:#b91c1c; }
@@ -98,7 +145,8 @@
             </div>
             <!-- Όνομα έργου (για το filename export) -->
             <input type="text" id="projectNameInput" placeholder="Όνομα Έργου..." 
-                class="hidden sm:block ml-3 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-amber-500 transition w-44"
+                class="hidden sm:block ml-3 border text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-amber-500 transition w-44"
+                style="background:#ffffff; color:#111827; border-color:#d1d5db;"
                 title="Χρησιμοποιείται στο όνομα αρχείου εξαγωγής">
         </div>
         
@@ -159,7 +207,11 @@
                     </div>
                 </div>
 
-                <div class="mt-6 pt-4 border-t border-slate-800 grid grid-cols-2 gap-2 text-center" id="statsDivider">
+                <div class="mt-6 pt-4 border-t border-slate-800 grid grid-cols-3 gap-2 text-center" id="statsDivider">
+                    <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 transition-colors duration-300" id="statCardTodo">
+                        <div class="text-2xl font-bold text-orange-400" id="todoPinsCount">0</div>
+                        <div class="text-[10px] text-slate-400 uppercase tracking-wider mt-1" id="statLabelTodo">Προς Υλοποίηση</div>
+                    </div>
                     <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 transition-colors duration-300" id="statCardPending">
                         <div class="text-2xl font-bold text-red-500" id="pendingPinsCount">0</div>
                         <div class="text-[10px] text-slate-400 uppercase tracking-wider mt-1" id="statLabelPending">Σε Εκκρεμότητα</div>
@@ -188,26 +240,25 @@
                 <div class="w-px h-5 bg-slate-700"></div>
                 <span class="text-[11px] text-slate-400 min-w-[70px]" id="transformLabel">100% · 0°</span>
                 <div class="flex-1"></div>
-                <span class="text-[10px] text-slate-500 italic">Scroll=zoom &nbsp;|&nbsp; Μπάρες/trackpad=μετακίνηση</span>
+                <span class="text-[10px] text-slate-600 italic">Scroll wheel = zoom &nbsp;|&nbsp; Μπάρες = μετακίνηση</span>
             </div>
 
-            <!-- Canvas — overflow scroll για μετακίνηση όταν το σχέδιο είναι μεγαλύτερο -->
-            <div class="bg-slate-50 border border-slate-200 rounded-xl shadow-lg transition-colors duration-300"
-                 id="canvasContainer"
-                 style="overflow:auto; min-height:500px; max-height:78vh; position:relative;">
-
-                <!-- Empty state -->
-                <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-8 text-center pointer-events-none" style="min-height:500px;">
-                    <i class="fa-solid fa-drafting-compass text-6xl mb-4 text-slate-300"></i>
+            <!-- Canvas -->
+            <div class="bg-slate-950 border border-slate-800 rounded-xl shadow-lg overflow-auto relative transition-colors duration-300" id="canvasContainer"
+                 style="height:calc(100vh - 180px); min-height:400px;">
+                <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-8 text-center pointer-events-none">
+                    <i class="fa-solid fa-drafting-compass text-6xl mb-4 text-slate-700"></i>
                     <h4 class="text-lg font-semibold text-slate-400" id="emptyStateTitle">Δεν έχει φορτωθεί σχέδιο</h4>
                     <p class="text-sm text-slate-500 max-w-sm mt-1">Ανεβάστε μια κάτοψη από το αριστερό panel για να ξεκινήσει η ψηφιακή καταγραφή.</p>
                 </div>
-
-                <!-- Scroll inner — το σχέδιο μεγαλώνει/μικραίνει εδώ, οι μπάρες εμφανίζονται αυτόματα -->
-                <div id="scrollInner" style="display:none; padding:20px; min-width:100%; min-height:100%;">
-                    <div id="blueprintWrapper" class="relative inline-block select-none" style="transform-origin:top left;">
-                        <img id="blueprintImg" src="" alt="Blueprint" class="block rounded-lg" style="transform-origin:top left; display:block;">
-                        <div id="pinsHolder" class="absolute inset-0 pointer-events-none"></div>
+                <!-- scrollAnchor: αυτό το div παίρνει το πραγματικό μέγεθος μετά το scale
+                     ώστε οι μπάρες scroll να καλύπτουν όλο το σχέδιο -->
+                <div id="scrollAnchor" style="display:none; position:relative;">
+                    <div id="transformContainer" style="position:absolute; top:0; left:0; transform-origin:top left;">
+                        <div id="blueprintWrapper" class="relative hidden inline-block select-none">
+                            <img id="blueprintImg" src="" alt="Blueprint" class="block h-auto rounded-lg" style="max-width:none; display:block;">
+                            <div id="pinsHolder" class="absolute inset-0 pointer-events-none"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -308,84 +359,76 @@
         let activePinId = null;
 
         // ============================================================
-        // ZOOM / ROTATE STATE — χρησιμοποιούμε CSS transform στο blueprintWrapper
-        // Η μετακίνηση γίνεται με τις scroll μπάρες του canvasContainer (overflow:auto)
+        // ZOOM / ROTATE / PAN STATE
         // ============================================================
         let viewScale    = 1.0;
         let viewRotation = 0;
+        let panX = 0, panY = 0;          // translate offset σε px
+        let isPanning    = false; // αχρησιμοποίητο — διατηρείται για συμβατότητα JSON
 
-        function applyTransform() {
-            const wrapper = document.getElementById('blueprintWrapper');
-            if (!wrapper) return;
-            wrapper.style.transform = `scale(${viewScale}) rotate(${viewRotation}deg)`;
-            // Προσαρμόζουμε το μέγεθος του scrollInner ώστε οι μπάρες να εμφανίζονται σωστά
-            updateScrollInnerSize();
+        function applyTransform(animate) {
+            const tc  = document.getElementById('transformContainer');
+            const img = document.getElementById('blueprintImg');
+            const cc  = document.getElementById('canvasContainer');
+            const sa  = document.getElementById('scrollAnchor');
+            if (!tc || !img || !cc || !sa) return;
+
+            // Διαστάσεις εικόνας μετά το scale (χωρίς rotation για απλότητα)
+            const rad  = viewRotation * Math.PI / 180;
+            const cosA = Math.abs(Math.cos(rad));
+            const sinA = Math.abs(Math.sin(rad));
+            const iW   = img.offsetWidth  || img.naturalWidth;
+            const iH   = img.offsetHeight || img.naturalHeight;
+            const scaledW = (iW * cosA + iH * sinA) * viewScale;
+            const scaledH = (iW * sinA + iH * cosA) * viewScale;
+
+            const pad    = 40;
+            const totalW = Math.max(scaledW + pad * 2, cc.clientWidth);
+            const totalH = Math.max(scaledH + pad * 2, cc.clientHeight);
+
+            // Το scrollAnchor παίρνει το συνολικό μέγεθος → οι μπάρες εμφανίζονται σωστά
+            sa.style.width  = totalW + 'px';
+            sa.style.height = totalH + 'px';
+
+            // Κεντράρουμε το transformContainer μέσα στο scrollAnchor
+            const offsetX = (totalW - scaledW) / 2;
+            const offsetY = (totalH - scaledH) / 2;
+
+            tc.style.transition = animate ? 'transform .2s ease' : 'none';
+            tc.style.transform  = `translate(${offsetX + panX}px, ${offsetY + panY}px) scale(${viewScale}) rotate(${viewRotation}deg)`;
+
             document.getElementById('transformLabel').textContent =
                 `${Math.round(viewScale * 100)}% · ${viewRotation}°`;
         }
 
-        function updateScrollInnerSize() {
-            const img = document.getElementById('blueprintImg');
-            const si  = document.getElementById('scrollInner');
-            if (!img || !si || !img.naturalWidth) return;
-            // Υπολογισμός πραγματικού μεγέθους μετά το transform
-            const rad  = viewRotation * Math.PI / 180;
-            const cosA = Math.abs(Math.cos(rad));
-            const sinA = Math.abs(Math.sin(rad));
-            const bw   = img.offsetWidth  * cosA + img.offsetHeight * sinA;
-            const bh   = img.offsetWidth  * sinA + img.offsetHeight * cosA;
-            si.style.width  = Math.ceil(bw * viewScale + 40) + 'px';
-            si.style.height = Math.ceil(bh * viewScale + 40) + 'px';
-        }
-
         function adjustZoom(delta) {
-            viewScale = Math.min(6, Math.max(0.1, viewScale + delta));
-            applyTransform();
+            viewScale = Math.min(6, Math.max(0.15, viewScale + delta));
+            applyTransform(true);
         }
 
         function adjustRotate(deg) {
             viewRotation = (viewRotation + deg + 360) % 360;
-            applyTransform();
+            applyTransform(true);
         }
 
         function resetTransform() {
-            viewScale    = 1.0;
-            viewRotation = 0;
-            applyTransform();
-            // Επαναφορά scroll στο κέντρο
-            centerCanvas();
+            viewScale = 1.0; viewRotation = 0; panX = 0; panY = 0;
+            applyTransform(true);
         }
 
-        // Κεντράρισμα του canvas scroll μετά το φόρτωμα εικόνας
-        function centerCanvas() {
-            const cc = document.getElementById('canvasContainer');
-            const si = document.getElementById('scrollInner');
-            if (!cc || !si) return;
-            setTimeout(() => {
-                cc.scrollLeft = (si.scrollWidth  - cc.clientWidth)  / 2;
-                cc.scrollTop  = (si.scrollHeight - cc.clientHeight) / 2;
-            }, 50);
-        }
-
-        // Wheel zoom πάνω στο canvas
+        // Wheel zoom
         document.addEventListener('DOMContentLoaded', () => {
             const cc = document.getElementById('canvasContainer');
             cc.addEventListener('wheel', (e) => {
-                if (document.getElementById('blueprintImg').src === '') return;
+                if (document.getElementById('scrollAnchor').style.display === 'none') return;
                 e.preventDefault();
-                const delta = e.deltaY < 0 ? 0.1 : -0.1;
-                // Zoom προς το σημείο του cursor
-                const rect     = cc.getBoundingClientRect();
-                const mouseX   = e.clientX - rect.left + cc.scrollLeft;
-                const mouseY   = e.clientY - rect.top  + cc.scrollTop;
-                const oldScale = viewScale;
-                viewScale      = Math.min(6, Math.max(0.1, viewScale + delta));
-                applyTransform();
-                // Διατηρούμε το σημείο zoom κεντραρισμένο
-                cc.scrollLeft += mouseX * (viewScale / oldScale - 1);
-                cc.scrollTop  += mouseY * (viewScale / oldScale - 1);
+                adjustZoom(e.deltaY < 0 ? 0.1 : -0.1);
             }, { passive: false });
+
+            // Pan αφαιρέθηκε — η μετακίνηση γίνεται με τις scroll μπάρες
         });
+
+        // Pan αφαιρέθηκε
 
         // ============================================================
         // INIT from localStorage
@@ -401,20 +444,19 @@
 
                     if (appState.blueprintDataUrl) {
                         const img = document.getElementById('blueprintImg');
-                        img.src = appState.blueprintDataUrl;
+                        document.getElementById('blueprintWrapper').classList.remove('hidden'); document.getElementById('scrollAnchor').style.display = 'block';
+                        document.getElementById('emptyState').classList.add('hidden');
                         img.onload = () => {
-                            const cc     = document.getElementById('canvasContainer');
-                            const scaleW = (cc.clientWidth  - 40) / img.naturalWidth;
-                            const scaleH = (cc.clientHeight - 40) / img.naturalHeight;
-                            viewScale    = Math.min(scaleW, scaleH, 1);
-                            viewRotation = 0;
-                            img.style.width  = img.naturalWidth  + 'px';
-                            img.style.height = img.naturalHeight + 'px';
-                            applyTransform();
-                            centerCanvas();
+                            requestAnimationFrame(() => {
+                                const cc = document.getElementById('canvasContainer');
+                                const scaleW = (cc.clientWidth  - 40) / img.naturalWidth;
+                                const scaleH = (cc.clientHeight - 40) / img.naturalHeight;
+                                viewScale = Math.min(scaleW, scaleH, 1);
+                                panX = 0; panY = 0; viewRotation = 0;
+                                applyTransform(true);
+                            });
                         };
-                        document.getElementById('scrollInner').style.display = 'block';
-                        document.getElementById('emptyState').style.display  = 'none';
+                        img.src = appState.blueprintDataUrl;
                     }
                     if (appState.logoDataUrl)   setLogoDisplay(appState.logoDataUrl);
                     if (appState.projectName)   document.getElementById('projectNameInput').value = appState.projectName;
@@ -492,6 +534,7 @@
                 instList: document.getElementById('instructionsList'),
                 cContainer:document.getElementById('canvasContainer'),
                 eTitle:   document.getElementById('emptyStateTitle'),
+                sCardT:   document.getElementById('statCardTodo'),
                 sCardP:   document.getElementById('statCardPending'),
                 sCardD:   document.getElementById('statCardDone'),
                 sLabelP:  document.getElementById('statLabelPending'),
@@ -528,10 +571,11 @@
                 cr(els.sInfo,'bg-slate-950','bg-white'); cr(els.sInfo,'border-slate-800','border-slate-200');
                 cr(els.instList,'text-slate-400','text-slate-600');
                 cr(els.sDiv,'border-slate-800','border-slate-200');
+                cr(els.sCardT,'bg-slate-900','bg-slate-50'); cr(els.sCardT,'border-slate-800','border-slate-200');
                 cr(els.sCardP,'bg-slate-900','bg-slate-50'); cr(els.sCardP,'border-slate-800','border-slate-200');
                 cr(els.sCardD,'bg-slate-900','bg-slate-50'); cr(els.sCardD,'border-slate-800','border-slate-200');
                 cr(els.sLabelP,'text-slate-400','text-slate-500'); cr(els.sLabelD,'text-slate-400','text-slate-500');
-                cr(els.cContainer,'bg-slate-950','bg-slate-50'); cr(els.cContainer,'border-slate-800','border-slate-200');
+                cr(els.cContainer,'bg-slate-950','bg-white'); cr(els.cContainer,'border-slate-800','border-slate-200');
                 if(els.eTitle) cr(els.eTitle,'text-slate-400','text-slate-700');
                 cr(els.footer,'bg-slate-950','bg-white');
                 if(els.mContainer){ cr(els.mContainer,'bg-slate-900','bg-white'); cr(els.mContainer,'border-slate-800','border-slate-200'); }
@@ -559,10 +603,11 @@
                 cr(els.sInfo,'bg-white','bg-slate-950'); cr(els.sInfo,'border-slate-200','border-slate-800');
                 cr(els.instList,'text-slate-600','text-slate-400');
                 cr(els.sDiv,'border-slate-200','border-slate-800');
+                cr(els.sCardT,'bg-slate-50','bg-slate-900'); cr(els.sCardT,'border-slate-200','border-slate-800');
                 cr(els.sCardP,'bg-slate-50','bg-slate-900'); cr(els.sCardP,'border-slate-200','border-slate-800');
                 cr(els.sCardD,'bg-slate-50','bg-slate-900'); cr(els.sCardD,'border-slate-200','border-slate-800');
                 cr(els.sLabelP,'text-slate-500','text-slate-400'); cr(els.sLabelD,'text-slate-500','text-slate-400');
-                cr(els.cContainer,'bg-slate-50','bg-slate-950'); cr(els.cContainer,'border-slate-200','border-slate-800');
+                cr(els.cContainer,'bg-white','bg-slate-950'); cr(els.cContainer,'border-slate-200','border-slate-800');
                 if(els.eTitle) cr(els.eTitle,'text-slate-700','text-slate-400');
                 cr(els.footer,'bg-white','bg-slate-950');
                 if(els.mContainer){ cr(els.mContainer,'bg-white','bg-slate-900'); cr(els.mContainer,'border-slate-200','border-slate-800'); }
@@ -593,21 +638,21 @@
             reader.onload = (e) => {
                 appState.blueprintDataUrl = e.target.result;
                 const img = document.getElementById('blueprintImg');
-                img.src = appState.blueprintDataUrl;
+                document.getElementById('blueprintWrapper').classList.remove('hidden'); document.getElementById('scrollAnchor').style.display = 'block';
+                document.getElementById('emptyState').classList.add('hidden');
                 img.onload = () => {
-                    // Αυτόματο zoom ώστε η εικόνα να χωράει στο container
-                    const cc   = document.getElementById('canvasContainer');
-                    const scaleW = (cc.clientWidth  - 40) / img.naturalWidth;
-                    const scaleH = (cc.clientHeight - 40) / img.naturalHeight;
-                    viewScale    = Math.min(scaleW, scaleH, 1);
-                    viewRotation = 0;
-                    img.style.width  = img.naturalWidth  + 'px';
-                    img.style.height = img.naturalHeight + 'px';
-                    applyTransform();
-                    centerCanvas();
+                    // requestAnimationFrame εξασφαλίζει ότι το layout έχει σταθεροποιηθεί
+                    // και το canvasContainer έχει τις σωστές διαστάσεις
+                    requestAnimationFrame(() => {
+                        const cc = document.getElementById('canvasContainer');
+                        const scaleW = (cc.clientWidth  - 40) / img.naturalWidth;
+                        const scaleH = (cc.clientHeight - 40) / img.naturalHeight;
+                        viewScale = Math.min(scaleW, scaleH, 1);
+                        panX = 0; panY = 0; viewRotation = 0;
+                        applyTransform(true);
+                    });
                 };
-                document.getElementById('scrollInner').style.display = 'block';
-                document.getElementById('emptyState').style.display  = 'none';
+                img.src = appState.blueprintDataUrl;
                 saveToStorage();
             };
             reader.readAsDataURL(file);
@@ -623,12 +668,31 @@
         });
 
         function handleCanvasClick(event) {
+            // Αν το mouse κινήθηκε >5px θεωρούμε pan, όχι κλικ
+            if (Math.abs(event.movementX) > 5 || Math.abs(event.movementY) > 5) return;
+
             const img  = document.getElementById('blueprintImg');
             const rect = img.getBoundingClientRect();
 
-            // Ποσοστιαίες συντεταγμένες πάνω στην εικόνα όπως φαίνεται (μετά scale)
-            const xPct = ((event.clientX - rect.left) / rect.width)  * 100;
-            const yPct = ((event.clientY - rect.top)  / rect.height) * 100;
+            // Κέντρο του transformed img
+            const cx = rect.left + rect.width  / 2;
+            const cy = rect.top  + rect.height / 2;
+
+            // Διάνυσμα κλικ από κέντρο
+            const dx = event.clientX - cx;
+            const dy = event.clientY - cy;
+
+            // Αντίστροφη rotation
+            const rad = (-viewRotation * Math.PI) / 180;
+            const dxR = dx * Math.cos(rad) - dy * Math.sin(rad);
+            const dyR = dx * Math.sin(rad) + dy * Math.cos(rad);
+
+            // Rendered φυσικό μέγεθος (πριν το scale)
+            const rendW = rect.width  / viewScale;
+            const rendH = rect.height / viewScale;
+
+            const xPct = ((dxR / viewScale) / rendW + 0.5) * 100;
+            const yPct = ((dyR / viewScale) / rendH + 0.5) * 100;
 
             if (xPct < 0 || xPct > 100 || yPct < 0 || yPct > 100) return;
 
@@ -658,14 +722,14 @@
                 el.style.position  = 'absolute';
                 el.style.transform = 'translate(-50%, -50%)';
 
-                let colorClass = 'bg-slate-500 border-slate-300 text-white';
+                let colorClass = 'bg-slate-500 border-slate-300 text-white pulse-slate';
                 if (pin.tasks.length > 0) {
                     if (pin.tasks.every(t => t.status === 'completed'))
-                        colorClass = 'bg-green-600 border-green-300 text-white';
+                        colorClass = 'bg-green-600 border-green-300 text-white pulse-green';
                     else if (pin.tasks.some(t => t.status === 'progress'))
-                        colorClass = 'bg-amber-500 border-amber-200 text-slate-950';
+                        colorClass = 'bg-amber-500 border-amber-200 text-slate-950 pulse-amber';
                     else
-                        colorClass = 'bg-red-500 border-red-200 text-white pulse-pin';
+                        colorClass = 'bg-red-500 border-red-200 text-white pulse-red';
                 }
 
                 el.className = `w-7 h-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold cursor-pointer select-none pointer-events-auto shadow-xl transition hover:scale-125 z-10 ${colorClass}`;
@@ -888,12 +952,16 @@
         // GLOBAL STATS + SIDEBAR TASK LIST
         // ============================================================
         function updateGlobalStats() {
-            let pending = 0, completed = 0;
+            let todo = 0, progress = 0, completed = 0;
             appState.pins.forEach(pin => {
-                if (pin.tasks.length > 0 && pin.tasks.every(t => t.status === 'completed')) completed++;
-                else pending++;
+                pin.tasks.forEach(t => {
+                    if      (t.status === 'completed') completed++;
+                    else if (t.status === 'progress')  progress++;
+                    else                               todo++;
+                });
             });
-            document.getElementById('pendingPinsCount').innerText   = pending;
+            document.getElementById('todoPinsCount').innerText      = todo;
+            document.getElementById('pendingPinsCount').innerText   = progress;
             document.getElementById('completedPinsCount').innerText = completed;
             renderSidebarTaskList();
         }
@@ -912,8 +980,8 @@
                 const statusLbl = t.status==='completed'?'✅':t.status==='progress'?'🔄':'⏳';
                 return `<div class="sb-task-item">
                     <span class="sb-task-dot" style="background:${dotColor}"></span>
-                    <span class="text-slate-500 truncate" style="max-width:60px" title="${t.pinName}">${t.pinName}</span>
-                    <span class="text-slate-300 truncate flex-1" title="${t.desc}">${t.desc}</span>
+                    <span class="truncate font-medium" style="max-width:60px;color:#374151" title="${t.pinName}">${t.pinName}</span>
+                    <span class="truncate flex-1" style="color:#111827" title="${t.desc}">${t.desc}</span>
                     <span>${statusLbl}</span>
                 </div>`;
             }).join('') + (allTasks.length > 15 ? `<p class="text-[9px] text-slate-600 italic mt-1">...και ${allTasks.length-15} ακόμα</p>` : '');
@@ -928,8 +996,8 @@
                 appState = { blueprintDataUrl:"", pins:[], theme, logoDataUrl:"", projectName:"" };
                 localStorage.removeItem('siteSpice_blueprint_data');
                 document.getElementById('blueprintImg').src = '';
-                document.getElementById('scrollInner').style.display = 'none';
-                document.getElementById('emptyState').style.display  = '';
+                document.getElementById('blueprintWrapper').classList.add('hidden'); document.getElementById('scrollAnchor').style.display = 'none';
+                document.getElementById('emptyState').classList.remove('hidden');
                 renderPins(); updateGlobalStats();
             }
         }
@@ -974,20 +1042,19 @@
                         applyTheme(appState.theme);
                         if (appState.blueprintDataUrl) {
                             const img = document.getElementById('blueprintImg');
-                            img.src = appState.blueprintDataUrl;
+                            document.getElementById('blueprintWrapper').classList.remove('hidden'); document.getElementById('scrollAnchor').style.display = 'block';
+                            document.getElementById('emptyState').classList.add('hidden');
                             img.onload = () => {
-                                const cc     = document.getElementById('canvasContainer');
-                                const scaleW = (cc.clientWidth  - 40) / img.naturalWidth;
-                                const scaleH = (cc.clientHeight - 40) / img.naturalHeight;
-                                viewScale    = Math.min(scaleW, scaleH, 1);
-                                viewRotation = 0;
-                                img.style.width  = img.naturalWidth  + 'px';
-                                img.style.height = img.naturalHeight + 'px';
-                                applyTransform();
-                                centerCanvas();
+                                requestAnimationFrame(() => {
+                                    const cc = document.getElementById('canvasContainer');
+                                    const scaleW = (cc.clientWidth  - 40) / img.naturalWidth;
+                                    const scaleH = (cc.clientHeight - 40) / img.naturalHeight;
+                                    viewScale = Math.min(scaleW, scaleH, 1);
+                                    panX = 0; panY = 0; viewRotation = 0;
+                                    applyTransform(true);
+                                });
                             };
-                            document.getElementById('scrollInner').style.display = 'block';
-                            document.getElementById('emptyState').style.display  = 'none';
+                            img.src = appState.blueprintDataUrl;
                         }
                         if (appState.logoDataUrl)   setLogoDisplay(appState.logoDataUrl);
                         if (appState.projectName)   document.getElementById('projectNameInput').value = appState.projectName;
@@ -1004,53 +1071,83 @@
         // EXPORT PDF
         // ============================================================
         function exportPDF() {
-            const report = document.getElementById('pdf-report');
-            const now    = new Date();
-            const dateStr = now.toLocaleDateString('el-GR', {day:'2-digit',month:'2-digit',year:'numeric'});
-            const timeStr = now.toLocaleTimeString('el-GR', {hour:'2-digit',minute:'2-digit'});
+            const report  = document.getElementById('pdf-report');
+            const now     = new Date();
+            const dateStr = now.toLocaleDateString('el-GR', {day:'2-digit', month:'2-digit', year:'numeric'});
+            const timeStr = now.toLocaleTimeString('el-GR', {hour:'2-digit', minute:'2-digit'});
+            const projName = appState.projectName || 'MANAGEMENT SYSTEM v5';
 
             let total=0, done=0, prog=0, pend=0;
             appState.pins.forEach(p => p.tasks.forEach(t => {
                 total++;
-                if(t.status==='completed') done++;
-                else if(t.status==='progress') prog++;
+                if (t.status==='completed') done++;
+                else if (t.status==='progress') prog++;
                 else pend++;
             }));
 
-            let html = `<h2>📋 Αναφορά Εργασιών — MANAGEMENT SYSTEM v5</h2>
-                <div style="font-size:11px;color:#64748b;margin-bottom:14px;">
-                    Ημερομηνία: <strong>${dateStr} ${timeStr}</strong> &nbsp;|&nbsp;
-                    ${appState.projectName ? `Έργο: <strong>${appState.projectName}</strong> &nbsp;|&nbsp;` : ''}
+            // ΣΕΛΙΔΑ 1: Εξώφυλλο + Σχέδιο
+            const bpImg = appState.blueprintDataUrl
+                ? `<img class="pdf-cover-blueprint" src="${appState.blueprintDataUrl}" alt="Κάτοψη">`
+                : '';
+
+            let html = `
+            <div class="pdf-cover">
+                <div class="pdf-cover-title">${projName}</div>
+                <div class="pdf-cover-sub">
+                    MANAGEMENT SYSTEM v5 &nbsp;|&nbsp; ${dateStr} ${timeStr}<br>
                     Σημεία: <strong>${appState.pins.length}</strong> &nbsp;|&nbsp;
-                    Σύνολο εργασιών: <strong>${total}</strong> &nbsp;|&nbsp;
-                    <span style="color:#b91c1c">Εκκρεμείς: <strong>${pend}</strong></span> &nbsp;|&nbsp;
-                    <span style="color:#92400e">Σε εξέλιξη: <strong>${prog}</strong></span> &nbsp;|&nbsp;
+                    Εργασίες: <strong>${total}</strong> &nbsp;|&nbsp;
+                    <span style="color:#b91c1c">Προς υλοποίηση: <strong>${pend}</strong></span> &nbsp;|&nbsp;
+                    <span style="color:#d97706">Σε εξέλιξη: <strong>${prog}</strong></span> &nbsp;|&nbsp;
                     <span style="color:#15803d">Ολοκληρωμένες: <strong>${done}</strong></span>
+                </div>
+                ${bpImg}
+            </div>
+
+            <div class="pdf-report-section">
+                <h2>📋 Αναφορά Εργασιών — ${projName}</h2>
+                <div style="font-size:11px;color:#64748b;margin-bottom:16px;">
+                    Ημερομηνία εξαγωγής: <strong>${dateStr} ${timeStr}</strong>
                 </div>`;
 
             if (appState.pins.length === 0) {
-                html += '<p style="font-size:11px;color:#94a3b8;font-style:italic;">Χωρίς σημεία.</p>';
+                html += '<p style="font-size:11px;color:#94a3b8;font-style:italic;">Δεν υπάρχουν καταγεγραμμένα σημεία.</p>';
             } else {
                 appState.pins.forEach(pin => {
-                    html += `<div class="pdf-pin-block"><div class="pdf-pin-title">📍 ${pin.name}</div>`;
+                    // Συλλέγουμε ΟΛΕΣ τις φωτογραφίες του pin για εμφάνιση δίπλα στον τίτλο
+                    const allPinPhotos = [];
+                    pin.tasks.forEach(t => {
+                        const srcs = (t.photos && t.photos.length>0) ? t.photos : (t.photo ? [t.photo] : []);
+                        srcs.forEach(s => allPinPhotos.push(s));
+                    });
+                    const pinPhotosHtml = allPinPhotos.length > 0
+                        ? `<div class="pdf-pin-photos">${allPinPhotos.map(s=>`<img src="${s}">`).join('')}</div>`
+                        : '';
+
+                    html += `<div class="pdf-pin-block">
+                        <div class="pdf-pin-header">
+                            <div class="pdf-pin-title">📍 ${pin.name}</div>
+                            ${pinPhotosHtml}
+                        </div>`;
                     if (pin.tasks.length === 0) {
                         html += `<div style="font-size:11px;color:#94a3b8;font-style:italic;padding:4px 0;">Χωρίς εργασίες.</div>`;
                     } else {
                         pin.tasks.forEach(t => {
                             const lbl = t.status==='completed'?'Ολοκληρώθηκε':t.status==='progress'?'Σε εξέλιξη':'Εκκρεμεί';
                             const cls = t.status==='completed'?'pdf-st-d':t.status==='progress'?'pdf-st-pr':'pdf-st-p';
-                            const srcs = (t.photos && t.photos.length>0) ? t.photos : (t.photo ? [t.photo] : []);
-                            const ph   = srcs.length>0 ? `<div class="pdf-photos">${srcs.map(s=>`<img src="${s}">`).join('')}</div>` : '';
                             html += `<div class="pdf-task-row">
                                 <strong>${t.desc}</strong><span class="pdf-st ${cls}">${lbl}</span><br>
-                                <span style="color:#64748b;font-size:10px;">👤 ${t.owner}</span>${ph}
+                                <span style="color:#64748b;font-size:10px;">👤 ${t.owner}</span>
                             </div>`;
                         });
                     }
                     html += `</div>`;
                 });
             }
+
             html += `<div class="pdf-footer">&copy; 2026 | ΓΚΑΡΙΠΗΣ ΓΙΩΡΓΟΣ | &bull; MANAGEMENT SYSTEM &bull; | ΜΕ ΕΠΙΦΥΛΑΞΗ ΠΑΝΤΟΣ ΝΟΜΙΜΟΥ ΔΙΚΑΙΩΜΑΤΟΣ</div>`;
+            html += `</div>`;
+
             report.innerHTML = html;
             window.print();
         }
